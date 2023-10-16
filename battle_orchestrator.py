@@ -69,9 +69,14 @@ class BattleOrchestrator:
 
 player_config = ArmyConfig(army.TuaThanArmy, [uprising_units.CrabRider, uprising_units.CrabRider, uprising_units.Harpooneers, uprising_units.Harpooneers, uprising_units.ReefKing])
 enemy_config = ArmyConfig(army.ImperialArmy, [uprising_units.Garrison2])
+
 terrain = battle.Terrain(battle.TerrainType.FROZEN_WASTES)
-battle_result_modifier = result_modifier.ResultModifier().add_modification(
-    result_modifier.TerrainResultModification).add_modification(result_modifier.DruidMountainHeart)
+
+battle_result_modifications: list[result_modifier.ResultModification] = [
+    result_modifier.TerrainResultModification,
+    result_modifier.DruidMountainHeart
+]
+battle_result_modifier = result_modifier.ResultModifier().add_modifications(battle_result_modifications)
 battle_modifier = BattleModifiers(roll_modifier.RollModifier().add_modification(roll_modifier.TerrainRollModification), 
                                   battle_result_modifier)
 battle_config = BattleConfig(player_config, enemy_config, terrain, battle_modifier)

@@ -176,6 +176,7 @@ class CrabRider(Unit):
 class Harpooneers(Unit):
     def __init__(self) -> None:
         super().__init__()
+        self.food_generated_this_combat: bool = False
 
     def initialize_archery_dice(self) -> None:
         self.archery_dice = []

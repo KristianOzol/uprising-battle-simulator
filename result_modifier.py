@@ -25,7 +25,7 @@ class ResultModification:
         return self.name
     
     @abstractmethod
-    def modify_result(self, current_battle_state: BattleState) -> None:
+    def modify_result(self, state: BattleState) -> None:
         pass
 
 class ResultModifier:
@@ -35,6 +35,9 @@ class ResultModifier:
     def add_modification(self, modification: ResultModification) -> "ResultModifier":
         self.modification_list.append(modification())
         return self
+    
+    def add_modifications(self, modifications: list[ResultModification]) -> "ResultModifier":
+        self.modification_list.extend(modifications)
 
     def apply_modifications(self, current_battle_state: BattleState) -> None:
         for modification in self.modification_list:
@@ -85,6 +88,54 @@ def player_will_take_damage(state: BattleState) -> bool:
     logger.debug(f"The player will not take damage from the enemy roll")
     return False
 
+def damage_needed_to_kill_enemy(state: BattleState):
+    hit_points: int
+    if len(state.enemy_army.units) == 1:
+        unit_name = state.enemy_army.units[0].name
+        if "Garrison" in unit_name:
+            hit_points = unit_name[-1]
+        else:
+            hit_points = 1
+    else:
+        hit_points = len(state.enemy_army.units)
+    damage_incoming = state.player_roll_results.skulls
+    damage_needed = hit_points + state.enemy_roll_results.shields - damage_incoming
+    logger.debug(f"Enemy has {hit_points} 'hit points' and {state.enemy_roll_results.shields}")
+    logger.debug(f"Player has {damage_incoming} skulls and thus needs to deal {damage_needed} damage more")
+    return damage_needed
+
+class LightOfTheThan(ResultModification):
+    def modify_result(self, state: BattleState) -> None:
+        if state.player_roll_results.blanks > 0:
+            state.player_roll_results.bolts += 1
+
+def return_zero_for_negative(num):
+    if num < 0:
+        return 0
+    else:
+        return num
+    
+class Hapooners(RerollModification):
+    def modify_result(self, state: BattleState) -> None:
+        if not state.player_roll_results.bolts > 0:
+            return
+        damage_needed_for_kill = damage_needed_to_kill_enemy(state)
+        damage_needed_for_weakening = damage_needed_for_kill - 1
+        damage_that_can_be_unblocked: int
+        if state.player_roll_results.skulls >= state.enemy_roll_results.shields:
+            damage_that_can_be_unblocked = state.enemy_roll_results.shields
+        elif state.player_roll_results.skulls < state.enemy_roll_results.shields:
+            damage_that_can_be_unblocked = state.player_roll_results.skulls
+        if damage_needed_for_weakening >= damage_that_can_be_unblocked:
+            bolts_needed = damage_that_can_be_unblocked + return_zero_for_negative(state.enemy_roll_results.shield - state.player_roll_results.skulls) 
+        else:
+            bolts_needed = damage_needed_for_weakening + return_zero_for_negative(state.enemy_roll_results.shield - state.player_roll_results.skulls)
+
+        logger.debug(f"Player needs {bolts_needed} more bolts to facilite damage for weakning")
+        bolt_surplus = return_zero_for_negative(state.player_roll_results.bolts - bolts_needed)
+        logger.debug(f"Player has {state.player_roll_results.bolts} and thus has a surplus of {bolt_surplus}")
+
+        
 class DruidMountainHeart(ResultModification):
     def ignore_skulls_of_single_die(self, state: BattleState) -> None:
         for skull_number in [3, 2, 1]:

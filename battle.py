@@ -6,7 +6,7 @@ import dice
 import uprising_units
 from battle_state import Terrain, BattleState, BattleStage, TerrainType
 from roll_modifier import RollModifier, TerrainRollModification
-from result_modifier import ResultModifier, TerrainResultModification, DruidMountainHeart
+from result_modifier import LightOfTheThan, ResultModifier, TerrainResultModification, DruidMountainHeart
 from loguru import logger
 
 class OverallBattleResult(StrEnum):
@@ -110,6 +110,7 @@ imp_army = army.ImperialArmy().add_garrison_level_3()
 
 #tua_army = TuaThanArmy().add_unit(units.Stoneshell.name).add_unit(units.CrabRider.name).add_unit(units.CrabRider.name)
 tua_army = army.TuaThanArmy().add_unit(uprising_units.CrabRider, 2).add_unit(uprising_units.Harpooneers, 2).add_unit(uprising_units.ReefKing)
+battle_result_modifiers = [LightOfTheThan, TerrainResultModification, DruidMountainHeart] 
 battle_modifiers = BattleModifiers(RollModifier().add_modification(TerrainRollModification), ResultModifier().add_modification(TerrainResultModification).add_modification(DruidMountainHeart))
 battle = Battle(tua_army, imp_army, Terrain(TerrainType.FOREST), battle_modifiers)
 results = battle.perform_battle()
