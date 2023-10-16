@@ -1,27 +1,10 @@
-from abc import abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 import army
-import dice
 import uprising_units
-from battle_state import Terrain, BattleState, BattleStage, TerrainType
+from battle_state import OverallBattleResult, Terrain, BattleState, BattleStage, TerrainType, BattleResult
 from roll_modifier import RollModifier, TerrainRollModification
-from result_modifier import LightOfTheThan, ResultModifier, TerrainResultModification, DruidMountainHeart
+from result_modifier import HarpoonersUpgrade, LightOfTheThan, ResultModifier, TerrainResultModification, DruidMountainHeart
 from loguru import logger
-
-class OverallBattleResult(StrEnum):
-    player_victory = "Player victory!"
-    draw = "Draw!"
-    player_defeat = "Player defeat!"
-    undecided = "Undecided"
-
-@dataclass
-class BattleResult:
-    player_net_resources = 0
-    overall_result: str = OverallBattleResult.undecided
-
-    def __repr__(self) -> str:
-       return f"{self.overall_result} Net resources: {self.player_net_resources}"
 @dataclass
 class BattleModifiers:
     roll_modifier: RollModifier
@@ -29,12 +12,11 @@ class BattleModifiers:
 
 class Battle:
     def __init__(self, player_army: army.Army, enemy_army: army.Army, terrian: Terrain, battle_modifiers: BattleModifiers) -> None:
-        self.battle_state: BattleState = BattleState(player_army, enemy_army, terrian)
+        self.battle_state: BattleState = BattleState(player_army, enemy_army, terrian, BattleResult())
         self.roll_modifier = battle_modifiers.roll_modifier
         self.result_modifier = battle_modifiers.result_modifier
         self.initial_player_value: int = player_army.get_army_value()
         self.player_lost_value: int = 0
-        self.battle_results: BattleResult = BattleResult()
         logger.debug(f"Setting up battle between {self.battle_state.player_army} with {self.battle_state.player_army.units}\
                      and {self.battle_state.enemy_army} with {self.battle_state.enemy_army.units}")
 
@@ -42,13 +24,20 @@ class Battle:
         player_losses = self.battle_state.enemy_roll_results.skulls - (self.battle_state.player_roll_results.shields - self.battle_state.enemy_roll_results.bolts)
         enemy_losses = self.battle_state.player_roll_results.skulls - (self.battle_state.enemy_roll_results.shields - self.battle_state.player_roll_results.bolts)
         self.battle_state.player_army.take_loses(player_losses)
-        self.battle_state.enemy_army.take_loses(enemy_losses)
+        if self.battle_state.player_army.mercy == True:
+            for _ in range(enemy_losses):
+                if len(self.battle_state.enemy_army.units) > 1:
+                    self.battle_state.enemy_army.take_loses(1)
+                elif self.battle_state.enemy_army.units[0].name in [uprising_units.Garrison2.name, uprising_units.Garrison3.name]:
+                    self.battle_state.enemy_army.take_loses(1)
+        else:
+            self.battle_state.enemy_army.take_loses(enemy_losses)
         
     def update_net_resources(self):
         round_loss = (self.initial_player_value - self.player_lost_value) - self.battle_state.player_army.get_army_value()
         self.player_lost_value += round_loss
         logger.debug(f"Lost value due to the current round: {round_loss}")
-        self.battle_results.player_net_resources -= round_loss
+        self.battle_state.battle_results.player_net_resources -= round_loss
 
     def archery_round(self):
         player_dice = self.battle_state.player_army.collect_army_dice_archery()
@@ -83,13 +72,13 @@ class Battle:
 
     def is_battle_over(self):
         if len(self.battle_state.player_army.units) == 0 and len(self.battle_state.enemy_army.units) == 0:
-            self.battle_results.overall_result = OverallBattleResult.draw
+            self.battle_state.battle_results.overall_result = OverallBattleResult.draw
             return True
         if len(self.battle_state.player_army.units) == 0:
-            self.battle_results.overall_result = OverallBattleResult.player_defeat
+            self.battle_state.battle_results.overall_result = OverallBattleResult.player_defeat
             return True
         if len(self.battle_state.enemy_army.units) == 0:
-            self.battle_results.overall_result = OverallBattleResult.player_victory
+            self.battle_state.battle_results.overall_result = OverallBattleResult.player_victory
             return True
         return False
     
@@ -98,21 +87,23 @@ class Battle:
         self.archery_round()
         
         if self.is_battle_over():
-            return self.battle_results
+            logger.debug(f"Battle result: {self.battle_state.battle_results}")
+            return self.battle_state.battle_results
         
         self.battle_state.battle_stage = BattleStage.CLASH
         logger.debug("Performing clash rounds!")
         self.clash_round()
         
-        return self.battle_results
+        logger.debug(f"Battle result: {self.battle_state.battle_results}")
+        return self.battle_state.battle_results
 
 imp_army = army.ImperialArmy().add_garrison_level_3()
 
 #tua_army = TuaThanArmy().add_unit(units.Stoneshell.name).add_unit(units.CrabRider.name).add_unit(units.CrabRider.name)
 tua_army = army.TuaThanArmy().add_unit(uprising_units.CrabRider, 2).add_unit(uprising_units.Harpooneers, 2).add_unit(uprising_units.ReefKing)
-battle_result_modifiers = [LightOfTheThan, TerrainResultModification, DruidMountainHeart] 
-battle_modifiers = BattleModifiers(RollModifier().add_modification(TerrainRollModification), ResultModifier().add_modification(TerrainResultModification).add_modification(DruidMountainHeart))
-battle = Battle(tua_army, imp_army, Terrain(TerrainType.FOREST), battle_modifiers)
+battle_result_modifiers = [LightOfTheThan, TerrainResultModification, DruidMountainHeart, HarpoonersUpgrade] 
+battle_modifiers = BattleModifiers(RollModifier().add_modification(TerrainRollModification), ResultModifier().add_modifications(battle_result_modifiers))
+battle = Battle(tua_army, imp_army, Terrain(TerrainType.FROZEN_WASTES), battle_modifiers)
 results = battle.perform_battle()
 logger.debug(results)
 

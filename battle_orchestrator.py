@@ -15,6 +15,7 @@ import army
 import uprising_units
 import roll_modifier
 import result_modifier
+from battle_state import BattleResult
 
 @dataclass
 class MetaResults:
@@ -30,16 +31,17 @@ class BattleConfig:
     player_army_config: ArmyConfig
     enemy_army_config: ArmyConfig
     terrain: battle.Terrain
-    battle_modifiers: BattleModifiers
-
+    battle_roll_modifications: list[roll_modifier.RollModification] 
+    battle_result_modifications: list[result_modifier.ResultModification] 
 class BattleOrchestrator:
     def __init__(self, battle_config: BattleConfig) -> None:
         self.player_army_config = battle_config.player_army_config
         self.enemy_army_config = battle_config.enemy_army_config
         self.terrain = battle_config.terrain
-        self.battle_modifiers = battle_config.battle_modifiers
-
-    def execute_battle(self) -> battle.OverallBattleResult:
+        self.roll_modifications = battle_config.battle_roll_modifications
+        self.result_modifications = battle_config.battle_result_modifications
+    
+    def execute_battle(self) -> BattleResult:
         player_army: army.Army = self.player_army_config.army_type()
         for unit in self.player_army_config.units:
             player_army.add_unit(unit)
@@ -47,7 +49,9 @@ class BattleOrchestrator:
         for unit in self.enemy_army_config.units:
             enemy_army.add_unit(unit)
 
-        battle: Battle = Battle(player_army, enemy_army, self.terrain, self.battle_modifiers)
+        battle_modifiers = BattleModifiers(roll_modifier.RollModifier().add_modifications(self.roll_modifications),
+                                           result_modifier.ResultModifier().add_modifications(self.result_modifications))
+        battle: Battle = Battle(player_army, enemy_army, self.terrain, battle_modifiers)
         return battle.perform_battle()
 
     def conduct_battles(self, number_of_iterations: int = 5000) -> MetaResults:
@@ -63,26 +67,24 @@ class BattleOrchestrator:
                                         'net_resources': battle_result.player_net_resources}, index=[0])
                 meta_results.data = pd.concat([meta_results.data, new_row], ignore_index=True)
         
-        logger.debug(f"Finished running {number_of_iterations}. Presenting dataframe:")
-        #logger.debug(meta_results.data)
+        logger.info(f"Finished running {number_of_iterations}. Presenting dataframe:")
         return meta_results
 
-player_config = ArmyConfig(army.TuaThanArmy, [uprising_units.CrabRider, uprising_units.CrabRider, uprising_units.Harpooneers, uprising_units.Harpooneers, uprising_units.ReefKing])
+player_config = ArmyConfig(army.TuaThanArmy, [uprising_units.Stoneshell, uprising_units.CrabRider, uprising_units.CrabRider, uprising_units.Harpooneers, uprising_units.Harpooneers])
 enemy_config = ArmyConfig(army.ImperialArmy, [uprising_units.Garrison2])
 
-terrain = battle.Terrain(battle.TerrainType.FROZEN_WASTES)
-
+terrain = battle.Terrain(battle.TerrainType.MARSHES)
 battle_result_modifications: list[result_modifier.ResultModification] = [
+    result_modifier.LightOfTheThan,
     result_modifier.TerrainResultModification,
-    result_modifier.DruidMountainHeart
+    result_modifier.DruidMountainHeart,
+    result_modifier.HarpoonersUpgrade
 ]
-battle_result_modifier = result_modifier.ResultModifier().add_modifications(battle_result_modifications)
-battle_modifier = BattleModifiers(roll_modifier.RollModifier().add_modification(roll_modifier.TerrainRollModification), 
-                                  battle_result_modifier)
-battle_config = BattleConfig(player_config, enemy_config, terrain, battle_modifier)
+battle_roll_modifications = [roll_modifier.TerrainRollModification]
+battle_config = BattleConfig(player_config, enemy_config, terrain, battle_roll_modifications, battle_result_modifications)
 meta_battle = BattleOrchestrator(battle_config)
 meta_results = meta_battle.conduct_battles()
-
+#logger.info(meta_results)
 # Calculate value counts and percentages
 value_counts = meta_results.data['overall_result'].value_counts()
 total_values = len(meta_results.data['overall_result'])

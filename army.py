@@ -8,6 +8,7 @@ class Army:
     def __init__(self) -> None:
         self.units: list[uprising_units.Unit] = []
         self.current_dice_pool: dice.DicePool
+        self.mercy: bool = False 
 
     @property
     @abstractmethod

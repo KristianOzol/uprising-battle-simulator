@@ -23,13 +23,26 @@ class Terrain:
     def __str__(self):
         return f'Terrain type: {self.terrain_type.value}'
 
+class OverallBattleResult(StrEnum):
+    player_victory = "Player victory!"
+    draw = "Draw!"
+    player_defeat = "Player defeat!"
+    undecided = "Undecided"
+class BattleResult:
+    def __init__(self) -> None:
+        self.player_net_resources = 0
+        self.overall_result: str = OverallBattleResult.undecided
+
+    def __repr__(self) -> str:
+       return f"{self.overall_result} Net resources: {self.player_net_resources}"
+
 @dataclass
 class BattleState:
     player_army: army.Army
     enemy_army: army.Army
     terrain: Terrain
+    battle_results: BattleResult
     player_roll_results: dice.DiceRollResults = dice.DiceRollResults()
     enemy_roll_results: dice.DiceRollResults = dice.DiceRollResults()
     clash_round_number: int = 1
     battle_stage: BattleStage = BattleStage.ARHCERY
-

@@ -30,6 +30,11 @@ class RollModifier:
     def add_modification(self, modification: RollModification) -> "RollModifier":
         self.modification_list.append(modification())
         return self
+    
+    def add_modifications(self, modifications: list[RollModification]) -> "RollModifier":
+        for modification in modifications:
+            self.modification_list.append(modification())
+        return self
 
     def apply_modifications(self, current_battle_state: BattleState) -> None:
         for modification in self.modification_list:
