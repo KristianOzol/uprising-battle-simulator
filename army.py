@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import override
 from loguru import logger
 import uprising_units, dice
-from dice import DiceNames, STANDARD_LOSS_PRIORITY
+from dice import STANDARD_LOSS_PRIORITY
 
 class Army:
     def __init__(self) -> None:
