@@ -1,19 +1,44 @@
+from __future__ import annotations
 from abc import abstractmethod
 from typing import override
 from loguru import logger
-import uprising_units, dice
+import uprising_units
+import dice
 from dice import STANDARD_LOSS_PRIORITY
 
 class Army:
     def __init__(self) -> None:
-        self.units: list[uprising_units.Unit] = []
         self.current_dice_pool: dice.DicePool
-        self.mercy: bool = False 
+        self.mercy: bool = False
 
-    @property
     @abstractmethod
-    def unit_roster(self) -> dict[str, uprising_units.Unit]:
+    def collect_army_dice_archery(self) -> dice.DicePool:
         pass
+
+    @abstractmethod
+    def collect_army_dice_clash(self) -> dice.DicePool:
+        pass
+
+    @abstractmethod
+    def take_loses(self, loss_count: int):
+        pass
+
+    @abstractmethod
+    def get_army_value(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_hit_points(self) -> int:
+        pass
+
+class EntityArmy(Army):
+    pass
+
+class UnitsArmy(Army):
+    def __init__(self) -> None:
+        super().__init__()
+        self.units: list[uprising_units.Unit] = []
+        self.loss_priority: list[dice.DiceNames] = STANDARD_LOSS_PRIORITY
 
     def add_unit(self, unit_class: uprising_units.Unit, count: int = 1) -> "Army":
         for _ in range(count):
@@ -43,7 +68,7 @@ class Army:
         return pool
     
     def remove_worst_unit(self) -> None:
-        for dice_type in STANDARD_LOSS_PRIORITY:
+        for dice_type in self.loss_priority:
             for index, unit in enumerate(self.units):
                 if len(unit.clash_dice) == 1:
                     if unit.clash_dice[0].name == dice_type:
@@ -63,14 +88,16 @@ class Army:
         for unit in self.units:
             value += unit.cost
         return value
+    
+    def get_hit_points(self) -> int:
+        return len(self.units)
+    
+    # def get_implicit_godpower(self) -> result_modifier.ResultModification:
+    #     for unit in self.units:
+    #         if unit.godpower:
+    #             return unit.godpower 
 
-class ImperialArmy(Army):
-    @property
-    def unit_roster(self) -> dict[str, uprising_units.Unit]:
-        roster = {uprising_units.Garrison1.name: uprising_units.Garrison1,
-                  uprising_units.Garrison2.name: uprising_units.Garrison2,
-                  uprising_units.Garrison3.name: uprising_units.Garrison3}
-        return roster
+class ImperialArmy(UnitsArmy):
     def __init__(self) -> None:
         super().__init__()
 
@@ -91,6 +118,11 @@ class ImperialArmy(Army):
             action_func()
         return
 
+    def get_hit_points(self) -> int:
+        if len(self.units) == 0:
+            return 0
+        return self.units[0].name[-1]
+    
     def garison1_loss(self):
         self.units = []
         logger.debug("Removed last garrison from imperial army")
@@ -115,34 +147,20 @@ class ImperialArmy(Army):
         self.units = [uprising_units.Garrison3()]
         return self
 
-class TuaThanArmy(Army):
-    @property
-    def unit_roster(self) -> dict[str, uprising_units.Unit]:
-        roster = {uprising_units.Stoneshell.name: uprising_units.Stoneshell,
-                  uprising_units.CrabRider.name: uprising_units.CrabRider,
-                  uprising_units.Harpooneers.name: uprising_units.Harpooneers,
-                  uprising_units.ReefKing.name: uprising_units.ReefKing}
-        return roster
+def main():
+    imp_army = ImperialArmy().add_unit(uprising_units.Garrison3)
 
-    def add_stoneshell(self) -> "TuaThanArmy":
-        self.units.append(uprising_units.Stoneshell())
-        return self
+    imp_army.collect_army_dice_clash()
 
-    def add_crabrider(self) -> "TuaThanArmy":
-        self.units.append(uprising_units.CrabRider())
-        return self
+    imp_army.take_loses(1)
 
-imp_army = ImperialArmy().add_garrison_level_3()
+    imp_army.collect_army_dice_clash()
 
-imp_army.collect_army_dice_clash()
+    #tua_army = TuaThanArmy().add_unit(units.Stoneshell.name).add_unit(units.CrabRider.name).add_unit(units.CrabRider.name)
+    tua_army = UnitsArmy().add_unit(uprising_units.Stoneshell, 2).add_unit(uprising_units.CrabRider, 2)
 
-imp_army.take_loses(1)
+    tua_army.collect_army_dice_clash()
 
-imp_army.collect_army_dice_clash()
+    tua_army.take_loses(5)
 
-#tua_army = TuaThanArmy().add_unit(units.Stoneshell.name).add_unit(units.CrabRider.name).add_unit(units.CrabRider.name)
-tua_army = TuaThanArmy().add_crabrider().add_stoneshell().add_crabrider().add_crabrider()
-
-tua_army.collect_army_dice_clash()
-
-tua_army.take_loses(5)
+main()

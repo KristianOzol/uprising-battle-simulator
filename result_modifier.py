@@ -1,16 +1,16 @@
-from abc import abstractmethod
+from __future__ import annotations
+from abc import ABC, abstractmethod
 from enum import StrEnum
-import dice
 from loguru import logger
-
+import battle_state
+import dice
 import uprising_units
-from battle_state import BattleState, TerrainType, BattleStage
 
 class ResultModificationTarget(StrEnum):
     PLAYER = "Player"
     ENEMY = "Enemy"
 
-class ResultModification:
+class ResultModification(ABC):
     def __init__(self) -> None:
         self.once_per_combat: bool
         self.once_per_round: bool
@@ -19,14 +19,14 @@ class ResultModification:
 
     @property
     @abstractmethod
-    def name(self) -> int:
+    def name(self) -> str:
         pass
 
     def __repr__(self) -> str:
         return self.name
     
     @abstractmethod
-    def modify_result(self, state: BattleState) -> None:
+    def modify_result(self, state: battle_state.BattleState) -> None:
         pass
 
 class ResultModifier:
@@ -42,7 +42,7 @@ class ResultModifier:
             self.modification_list.append(modification())
         return self
 
-    def apply_modifications(self, state: BattleState) -> None:
+    def apply_modifications(self, state: battle_state.BattleState) -> None:
         for modification in self.modification_list:
             modification.modify_result(state)
 
@@ -76,21 +76,25 @@ class RerollModification(ResultModification):
             die.rerolled = False
         logger.debug(f"New dice roll results after rerolling: {dice_results}")
     
-    def modify_result(self, current_battle_state: BattleState) -> None:
+    def modify_result(self, state: battle_state.BattleState) -> None:
         logger.debug(f"Rerolling dice (with reroll count {self.reroll_count}) for {self.target}")
         if self.target == ResultModificationTarget.PLAYER:
-            self.reroll_dice(current_battle_state.player_army.current_dice_pool, current_battle_state.player_roll_results)
+            self.reroll_dice(state.player_army.current_dice_pool, state.player_roll_results)
         else:
-            self.reroll_dice(current_battle_state.enemy_army.current_dice_pool, current_battle_state.enemy_roll_results)
+            self.reroll_dice(state.enemy_army.current_dice_pool, state.enemy_roll_results)
 
-def player_will_take_damage(state: BattleState) -> bool:
+    @property
+    def name(self) -> str:
+        return "RerollModification" 
+
+def player_will_take_damage(state: battle_state.BattleState) -> bool:
     if (state.player_roll_results.shields - state.enemy_roll_results.bolts) < state.enemy_roll_results.skulls:
         logger.debug(f"The enemy will deal damage to the player units without intervention")
         return True
     logger.debug(f"The player will not take damage from the enemy roll")
     return False
 
-def damage_needed_to_kill_enemy(state: BattleState):
+def damage_needed_to_kill_enemy(state: battle_state.BattleState):
     hit_points: int
     if len(state.enemy_army.units) == 1:
         unit_name = state.enemy_army.units[0].name
@@ -111,7 +115,7 @@ class LightOfTheThan(ResultModification):
     def name(self) -> int:
         return "Light of The Than"
 
-    def modify_result(self, state: BattleState) -> None:
+    def modify_result(self, state: battle_state.BattleState) -> None:
         if state.player_roll_results.blanks > 0:
             logger.debug("LightOfTheThan generated a bolt because of 1+ blanks")
             state.player_roll_results.bolts += 1
@@ -127,7 +131,11 @@ class HarpoonersUpgrade(ResultModification):
         super().__init__()
         self.use_count = 0
 
-    def generate_food_from_harpooneers(self, state: BattleState) -> None:
+    @property
+    def name(self) -> str:
+        return "Harpooners Upgrade"
+    
+    def generate_food_from_harpooneers(self, state: battle_state.BattleState) -> None:
         if self.use_count < 2:
             for unit in state.player_army.units:
                 if type(unit) == uprising_units.Harpooneers:
@@ -139,7 +147,7 @@ class HarpoonersUpgrade(ResultModification):
                         logger.debug(f"Hapooneer has generated 1 food for 1 bolt!")
                         return
     
-    def modify_result(self, state: BattleState) -> None:
+    def modify_result(self, state: battle_state.BattleState) -> None:
         if self.use_count >= 2:
             state.player_army.mercy = False
             return
@@ -174,11 +182,11 @@ class HarpoonersUpgrade(ResultModification):
             for _ in range(bolt_surplus):
                 self.generate_food_from_harpooneers(state)
 
-    def clean_up(self, state: BattleState):
+    def clean_up(self, state: battle_state.BattleState):
         state.player_army.mercy = False
 
 class DruidMountainHeart(ResultModification):
-    def ignore_skulls_of_single_die(self, state: BattleState) -> None:
+    def ignore_skulls_of_single_die(self, state: battle_state.BattleState) -> None:
         for skull_number in [3, 2, 1]:
             for die in state.enemy_army.current_dice_pool.dice:
                 if die.result.skulls == skull_number:
@@ -187,17 +195,25 @@ class DruidMountainHeart(ResultModification):
                     state.player_roll_results.bolts -= 1
                     return
 
-    def modify_result(self, state: BattleState) -> None:
+    def modify_result(self, state: battle_state.BattleState) -> None:
         if state.player_roll_results.bolts >= 1 and player_will_take_damage(state):
             self.ignore_skulls_of_single_die(state)
             logger.debug(f"The enemy now has the following result after Mountain Heart modification: {state.enemy_roll_results}")
 
+    @property
+    def name(self) -> str:
+        return "Druid Mountain Heart"
+
 class TerrainResultModification(ResultModification):
-    def modify_result(self, current_battle_state: BattleState) -> None:
-        if current_battle_state.battle_stage == BattleStage.ARHCERY:
-            if current_battle_state.terrain.terrain_type == TerrainType.FOREST:
+    def modify_result(self, state: battle_state.BattleState) -> None:
+        if state.battle_stage == battle_state.BattleStage.ARHCERY:
+            if state.terrain.terrain_type == battle_state.TerrainType.FOREST:
                 logger.debug("Fighting in forest, rerolls blanks for best dice")
-                RerollModification(ResultModificationTarget.PLAYER, 2).modify_result(current_battle_state)
-                RerollModification(ResultModificationTarget.ENEMY, 2).modify_result(current_battle_state)
+                RerollModification(ResultModificationTarget.PLAYER, 2).modify_result(state)
+                RerollModification(ResultModificationTarget.ENEMY, 2).modify_result(state)
+
+    @property
+    def name(self) -> str:
+        return "Terrain Result Modification"
                 
                 

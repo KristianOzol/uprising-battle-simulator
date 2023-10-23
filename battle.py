@@ -17,8 +17,8 @@ class Battle:
         self.result_modifier = battle_modifiers.result_modifier
         self.initial_player_value: int = player_army.get_army_value()
         self.player_lost_value: int = 0
-        logger.debug(f"Setting up battle between {self.battle_state.player_army} with {self.battle_state.player_army.units}\
-                     and {self.battle_state.enemy_army} with {self.battle_state.enemy_army.units}")
+        logger.debug(f"Setting up battle between {self.battle_state.player_army} with {self.battle_state.player_army}\
+                     and {self.battle_state.enemy_army} with {self.battle_state.enemy_army}")
 
     def resolve_roll_result_effects(self):
         player_losses = self.battle_state.enemy_roll_results.skulls - (self.battle_state.player_roll_results.shields - self.battle_state.enemy_roll_results.bolts)
@@ -71,13 +71,13 @@ class Battle:
             self.clash_round()
 
     def is_battle_over(self):
-        if len(self.battle_state.player_army.units) == 0 and len(self.battle_state.enemy_army.units) == 0:
+        if self.battle_state.player_army.get_hit_points() == 0 and self.battle_state.enemy_army.get_hit_points() == 0:
             self.battle_state.battle_results.overall_result = OverallBattleResult.draw
             return True
-        if len(self.battle_state.player_army.units) == 0:
+        if self.battle_state.player_army.get_hit_points() == 0  == 0:
             self.battle_state.battle_results.overall_result = OverallBattleResult.player_defeat
             return True
-        if len(self.battle_state.enemy_army.units) == 0:
+        if  self.battle_state.enemy_army.get_hit_points() == 0:
             self.battle_state.battle_results.overall_result = OverallBattleResult.player_victory
             return True
         return False
@@ -97,10 +97,10 @@ class Battle:
         logger.debug(f"Battle result: {self.battle_state.battle_results}")
         return self.battle_state.battle_results
 
-imp_army = army.ImperialArmy().add_garrison_level_3()
+imp_army = army.ImperialArmy().add_unit(uprising_units.Garrison3)
 
 #tua_army = TuaThanArmy().add_unit(units.Stoneshell.name).add_unit(units.CrabRider.name).add_unit(units.CrabRider.name)
-tua_army = army.TuaThanArmy().add_unit(uprising_units.CrabRider, 2).add_unit(uprising_units.Harpooneers, 2).add_unit(uprising_units.ReefKing)
+tua_army = army.UnitsArmy().add_unit(uprising_units.CrabRider, 2).add_unit(uprising_units.Harpooneers, 2).add_unit(uprising_units.ReefKing)
 battle_result_modifiers = [LightOfTheThan, TerrainResultModification, DruidMountainHeart, HarpoonersUpgrade] 
 battle_modifiers = BattleModifiers(RollModifier().add_modification(TerrainRollModification), ResultModifier().add_modifications(battle_result_modifiers))
 battle = Battle(tua_army, imp_army, Terrain(TerrainType.FROZEN_WASTES), battle_modifiers)
